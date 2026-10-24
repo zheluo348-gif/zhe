@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+from swift_rules import run_checks
 root=Path(__file__).resolve().parents[2]
 models=(root/'XiaoXiaoQuan/Sources/Models.swift').read_text()
 types=models.split('@MainActor final class CircleStore')[0].replace('import SwiftUI','import Foundation').replace('    var creative: CreativeSpace?\n','')
@@ -57,4 +58,6 @@ tests='''
 }
 '''
 (root/'tmp').mkdir(parents=True, exist_ok=True)
-(root/'tmp/PlaygroundLogicChecks.swift').write_text(growth+types+stub+play+tests)
+path=root/'tmp/PlaygroundLogicChecks.swift'
+path.write_text(growth+types+stub+play+tests)
+run_checks(path)

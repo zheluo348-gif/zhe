@@ -1,5 +1,6 @@
 from pathlib import Path
-import re, subprocess
+import re
+from swift_rules import run_checks
 root=Path(__file__).resolve().parents[2]
 src=root/'XiaoXiaoQuan/Sources'
 models=(src/'Models.swift').read_text().split('@MainActor final class CircleStore')[0].replace('import SwiftUI','import Foundation')
@@ -93,6 +94,6 @@ tests=r'''
 }
 '''.replace('\\.','\.').replace('\\"','\"').replace('\\(checks)','\(checks)')
 (root/'tmp').mkdir(exist_ok=True)
-path=root/'tmp/GrowthRuleChecks.swift';path.write_text(models+creative+play+growth+store+service+choice+tests)
-subprocess.run(['xcrun','swiftc','-parse-as-library',str(path),'-o',str(root/'tmp/GrowthRuleChecks')],check=True)
-subprocess.run([str(root/'tmp/GrowthRuleChecks')],check=True)
+networking = '\n#if canImport(FoundationNetworking)\nimport FoundationNetworking\n#endif\n'
+path=root/'tmp/GrowthRuleChecks.swift';path.write_text(networking+models+creative+play+growth+store+service+choice+tests)
+run_checks(path)

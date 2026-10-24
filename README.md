@@ -54,11 +54,11 @@ zsh XiaoXiaoQuan/Tools/run-preview.sh YOUR_SIMULATOR_UDID
 ```sh
 python3 XiaoXiaoQuan/Tools/check_growth_rules.py
 python3 XiaoXiaoQuan/Tools/check_playground_logic.py
-xcrun swiftc -parse-as-library tmp/PlaygroundLogicChecks.swift -o tmp/PlaygroundLogicChecks
-./tmp/PlaygroundLogicChecks
 ```
 
-前者直接编译并运行成长、月度壁纸、AI选择和邀请规则；后者生成Swift校验程序，再由后两行编译运行。两者采用内存存储适配器，不能替代界面或真实网络测试。0.4.1已通过206项成长/AI/邀请规则和31项既有玩法规则检查；本次定向UI验证覆盖8个不同流程，最终补验4/4通过。
+两条命令都会生成、编译并执行对应的Swift规则检查，编译或断言失败会返回非零状态。前者检查成长、月度壁纸、AI选择和邀请规则；后者检查既有玩法规则。两者采用内存存储适配器，不能替代界面或真实网络测试。0.4.1已通过206项成长/AI/邀请规则和31项既有玩法规则检查；本次定向UI验证覆盖8个不同流程，最终补验4/4通过。
+
+macOS使用Xcode的`xcrun swiftc`；Linux优先使用本机`swiftc`，未安装时使用本机Docker中的Swift 6.2.1镜像。镜像按`XiaoXiaoQuan/Tools/swift_rules.py`中的SHA-256摘要固定，首次运行时自动下载，需要本机Docker服务已启动。检查容器禁用网络，只挂载`tmp/`中的生成文件，并以当前用户运行。Linux上的规则检查通过不代表iOS界面或真机测试通过。
 
 在Xcode的Test菜单运行界面测试；或指定专用模拟器：
 
