@@ -1,0 +1,39 @@
+# macOS / editors
+.DS_Store
+*.swp
+*.swo
+
+# Xcode build products and local state
+**/DerivedData*/
+**/build/
+**/Evidence/
+**/xcuserdata/
+*.xcuserstate
+*.xcresult/
+*.xcarchive/
+*.app/
+*.ipa
+*.dSYM/
+
+# Local exports, screenshots, device/user backups and scratch files
+/output/
+/tmp/
+
+# Credentials, signing material and local configuration
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.pem
+*.key
+*.cer
+*.crt
+*.mobileprovision
+*.provisionprofile
+*.xcconfig.local
+
+# Python caches
+__pycache__/
+*.py[cod]
+.venv/
