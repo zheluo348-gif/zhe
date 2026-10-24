@@ -285,7 +285,7 @@ struct ProfileView: View {
             NavigationLink(value: Screen.sharing) { Surface { IconTile(icon: "battery.75percent", title: "状态分享", subtitle: "电量与城市天气，由你决定", color: Palette.teal) } }.buttonStyle(.plain)
             if !store.friends { Surface { VStack(alignment: .leading, spacing: 12) { Text("在一起的日期").font(.subheadline.bold()); DatePicker("起始日", selection: Binding(get: { store.state.joined }, set: { store.state.joined = Calendar.current.startOfDay(for: $0); store.persist() }), in: ...Date(), displayedComponents: .date).datePickerStyle(.compact).font(.subheadline); Text("修改后首页的天数与周年倒数会一起更新。").font(.caption).foregroundStyle(Palette.muted) } } }
             Surface { Toggle("互动触感", isOn: Binding(get: { store.state.haptics }, set: { store.state.haptics = $0; store.persist() })).font(.subheadline).tint(store.accent) }
-            Surface { VStack(alignment: .leading, spacing: 13) { Label("关于这个开发版", systemImage: "iphone").font(.headline); Text("小小圈 0.4.1 · 本机开发版").font(.subheadline); Text("按 V2 / V3 设计逐步制作。消息、贴纸、绘图、原声录音、回忆和试玩进度保存在此设备。\n\nAI、登录邀请、跨设备聊天、推送与付费仍待接入。此处的本机模板和题库不会冒充 AI 或真人回复。").font(.subheadline).foregroundStyle(Palette.muted).lineSpacing(6) } }
+            Surface { VStack(alignment: .leading, spacing: 13) { Label("关于这个开发版", systemImage: "iphone").font(.headline); Text("小小圈 0.4.2 · 本机开发版").font(.subheadline); Text("按 V2 / V3 设计逐步制作。消息、贴纸、绘图、原声录音、回忆和试玩进度保存在此设备。\n\nAI、登录邀请、跨设备聊天、推送与付费仍待接入。此处的本机模板和题库不会冒充 AI 或真人回复。").font(.subheadline).foregroundStyle(Palette.muted).lineSpacing(6) } }
             Text("只属于彼此的一点小小日常。 ").font(.caption).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.vertical, 15)
         }.padding(20) }.background(store.background)
     }

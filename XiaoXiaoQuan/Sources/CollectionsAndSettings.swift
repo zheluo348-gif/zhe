@@ -123,11 +123,11 @@ struct PrivacyAndExitView: View {
                 do {
                     let url = FileManager.default.temporaryDirectory.appendingPathComponent("小小圈文字备份-\(store.state.mode).json")
                     let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]; encoder.dateEncodingStrategy = .iso8601
-                    try encoder.encode(store.current).write(to: url, options: .atomic); export = url
+                    try encoder.encode(store.current.exportableCopy).write(to: url, options: .atomic); export = url
                 } catch { self.error = "备份文件没有准备成功，请重试。" }
             }.accessibilityIdentifier("prepareExport")
             if let export { ShareLink(item: export) { Label("选择备份保存位置", systemImage: "folder").frame(maxWidth: .infinity, minHeight: 48) } }
-            Text("导出当前空间文字与记录信息，不包含照片、绘图和音频文件，也不是云备份。文件中包含私密信件内容，请自行选择保存位置。").font(.caption).foregroundStyle(Palette.muted).lineSpacing(6)
+            Text("导出当前空间文字与记录信息，不包含阅后即焚消息、照片、绘图和音频文件，也不是云备份。文件中包含私密信件内容，请自行选择保存位置。").font(.caption).foregroundStyle(Palette.muted).lineSpacing(6)
             Button("暂时离开这个本机空间") { leaving = true }.foregroundStyle(Palette.rose).frame(maxWidth: .infinity, minHeight: 48).accessibilityIdentifier("leaveSpace")
             Text("离开会从“我的空间”列表移除，保留本机记录；重新添加本机体验空间后仍可查看。真实解绑、删除账号与云端数据处理将在联网版实现。").font(.caption).foregroundStyle(Palette.muted)
         }.confirmationDialog("离开“\(store.spaceName)”？本机记录会保留。", isPresented: $leaving, titleVisibility: .visible) { Button("保留记录并离开", role: .destructive) { store.localExitSpace(); NotificationCenter.default.post(name: .circleOpenHome, object: nil) } }

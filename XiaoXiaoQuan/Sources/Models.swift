@@ -1,5 +1,22 @@
 import SwiftUI
 
+enum MessageBurnDuration: Int, CaseIterable, Codable, Identifiable {
+    case five = 5, ten = 10, thirty = 30, sixty = 60
+    var id: Int { rawValue }
+    var title: String { "查看后\(rawValue)秒销毁" }
+}
+
+struct DisappearingContent: Codable, Equatable {
+    var body: String?
+    let duration: MessageBurnDuration
+    var expiresAt: Date?
+
+    func readableBody(at date: Date) -> String? {
+        guard expiresAt.map({ $0 > date }) ?? true else { return nil }
+        return body
+    }
+}
+
 struct ChatMessage: Identifiable, Codable, Equatable {
     var id = UUID()
     var text: String
@@ -9,6 +26,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     var attachment: String?
     var date = Date()
     var invitation: PlayInvitation?
+    var disappearing: DisappearingContent?
 }
 struct Wish: Identifiable, Codable {
     var id = UUID()
@@ -42,6 +60,30 @@ struct SpaceData: Codable {
     var mood = 75
     var clean = 40
     var petLog: [String] = ["一起入住了小窝"]
+
+    var exportableCopy: SpaceData {
+        var copy = self
+        copy.messages.removeAll { $0.disappearing != nil }
+        return copy
+    }
+
+    mutating func expireDisappearingMessages(at date: Date) -> Bool {
+        var changed = false
+        for i in messages.indices {
+            guard let content = messages[i].disappearing, content.body != nil,
+                  let deadline = content.expiresAt, deadline <= date else { continue }
+            messages[i].disappearing?.body = nil
+            changed = true
+        }
+        return changed
+    }
+
+    var nextMessageExpiration: Date? {
+        messages.compactMap { message in
+            guard message.disappearing?.body != nil else { return nil }
+            return message.disappearing?.expiresAt
+        }.min()
+    }
 }
 struct SavedState: Codable {
     var aiEnabled: Bool?
@@ -60,6 +102,7 @@ struct SavedState: Codable {
     @Published var saveError: String?
     private let defaults: UserDefaults
     private let key = "xiaoxiaoquan.preview.v1"
+    private var messageExpirationTask: Task<Void, Never>?
     var friends: Bool { state.mode == "friends" }
     var accent: Color { friends ? Palette.teal : Palette.rose }
     var spaceName: String { spaceName(for:state.mode) }
@@ -108,7 +151,9 @@ struct SavedState: Codable {
         let renamedCouple = state.couple.adoptSugarName()
         let renamedFriends = state.friends.adoptSugarName()
         if renamedCouple || renamedFriends { persist() }
+        expireDisappearingMessages()
     }
+    deinit { messageExpirationTask?.cancel() }
     static func seed() -> SavedState {
         var s = SavedState()
         s.joined = Calendar.current.date(byAdding: .day, value: -712, to: Calendar.current.startOfDay(for: Date())) ?? Date()
@@ -149,6 +194,51 @@ struct SavedState: Codable {
         guard !value.isEmpty else { return }
         let sender = myName
         update { $0.messages.append(ChatMessage(text: value, sender: sender, mine: true, kind: kind)); $0.playground?.awarded.insert("firstMessage") }
+    }
+    func sendDisappearingMessage(_ text: String, duration: MessageBurnDuration) {
+        let value = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(2000))
+        guard !value.isEmpty else { return }
+        let sender = myName
+        update {
+            $0.messages.append(ChatMessage(text: "阅后即焚消息", sender: sender, mine: true,
+                kind: "disappearing", disappearing: DisappearingContent(body: value, duration: duration)))
+            $0.draft = nil
+            $0.playground?.awarded.insert("firstMessage")
+        }
+    }
+    func revealDisappearingMessage(_ id: UUID, space: String, at date: Date = Date()) -> Bool {
+        guard ["couple", "friends"].contains(space) else { return false }
+        var data = space == "friends" ? state.friends : state.couple
+        guard let i = data.messages.firstIndex(where: { $0.id == id }),
+              let content = data.messages[i].disappearing,
+              content.readableBody(at: date) != nil else {
+            expireDisappearingMessages(at: date)
+            return false
+        }
+        if content.expiresAt == nil {
+            data.messages[i].disappearing?.expiresAt = date.addingTimeInterval(Double(content.duration.rawValue))
+            if space == "friends" { state.friends = data } else { state.couple = data }
+            persist()
+        }
+        scheduleMessageExpiration()
+        return true
+    }
+    func expireDisappearingMessages(at date: Date = Date()) {
+        let coupleChanged = state.couple.expireDisappearingMessages(at: date)
+        let friendsChanged = state.friends.expireDisappearingMessages(at: date)
+        if coupleChanged || friendsChanged { persist() }
+        scheduleMessageExpiration()
+    }
+    private func scheduleMessageExpiration() {
+        messageExpirationTask?.cancel()
+        guard let deadline = [state.couple.nextMessageExpiration, state.friends.nextMessageExpiration]
+            .compactMap({ $0 }).min() else { messageExpirationTask = nil; return }
+        let delay = max(0, deadline.timeIntervalSinceNow)
+        messageExpirationTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+            guard !Task.isCancelled else { return }
+            self?.expireDisappearingMessages()
+        }
     }
     func poke() { update { $0.pokes += 1 }; if state.haptics { UIImpactFeedbackGenerator(style: .soft).impactOccurred() } }
     func answer(_ value: String) { update { $0.answer = value }; }

@@ -10,6 +10,8 @@ struct PlayfulChatView: View {
     @State private var celebrationID = UUID()
     @State private var hugPreview: HugPreviewRequest?
     @State private var gameToPlay: ChatMessage?
+    @State private var disappearingMessage: DisappearingMessageRequest?
+    @State private var burnDuration: MessageBurnDuration?
     @State private var noteMode = true
     @State private var draft = ""
     @State private var drawing = false
@@ -42,9 +44,11 @@ struct PlayfulChatView: View {
             .onAppear { draft = store.current.draft ?? "" }
             .onChange(of: draft) { _, v in
                 if v.count > 2000 { draft = String(v.prefix(2000)) }
-                store.update { $0.draft = String(v.prefix(2000)) }
+                store.update { $0.draft = burnDuration == nil ? String(v.prefix(2000)) : nil }
             }
+            .onChange(of: burnDuration) { _, value in store.update { $0.draft = value == nil ? draft : nil } }
             .fullScreenCover(item:$hugPreview) { request in HugReceiverPreview(message:request.message) }
+            .fullScreenCover(item:$disappearingMessage) { request in DisappearingMessageReader(request: request) }
             .sheet(item:$gameToPlay) { message in GameInvitationSheet(message:message) }
             .sheet(isPresented: $drawing) { DrawingNoteView() }
             .sheet(isPresented: $voice) { VoiceNoteView() }
@@ -79,13 +83,15 @@ struct PlayfulChatView: View {
             VStack(alignment: m.mine ? .trailing : .leading, spacing: 5) {
                 if store.friends { Text(m.mine ? store.myName:m.sender).font(.caption2).foregroundStyle(Palette.muted) }
                 messageContent(m).contextMenu {
-                    Button("回复", systemImage: "arrowshape.turn.up.left") { reply = m.text; focused = true }
-                    if !m.kind.hasPrefix("voice:") {
-                        Button(store.friends ? "上梗墙" : "保存回忆", systemImage: "bookmark") {
-                            store.addMemory(String((m.text.isEmpty ? "聊天的小片段" : m.text).prefix(60)), note: "来自\(m.sender)的聊天", kind: m.attachment != nil ? "照片" : (store.friends ? "梗墙" : "小事"), attachment: m.attachment)
+                    if m.disappearing == nil {
+                        Button("回复", systemImage: "arrowshape.turn.up.left") { reply = m.text; focused = true }
+                        if !m.kind.hasPrefix("voice:") {
+                            Button(store.friends ? "上梗墙" : "保存回忆", systemImage: "bookmark") {
+                                store.addMemory(String((m.text.isEmpty ? "聊天的小片段" : m.text).prefix(60)), note: "来自\(m.sender)的聊天", kind: m.attachment != nil ? "照片" : (store.friends ? "梗墙" : "小事"), attachment: m.attachment)
+                            }
                         }
+                        Button("复制文字", systemImage: "doc.on.doc") { UIPasteboard.general.string = m.text }
                     }
-                    Button("复制文字", systemImage: "doc.on.doc") { UIPasteboard.general.string = m.text }
                     if m.mine { Button("删除本机消息", systemImage: "trash", role: .destructive) { store.update { $0.messages.removeAll { $0.id == m.id } } } }
                 }
                 Text(m.mine ? "本机保存 · \(m.date.formatted(.dateTime.hour().minute()))" : "历史示例").font(.system(size: 10)).foregroundStyle(Palette.muted)
@@ -95,7 +101,15 @@ struct PlayfulChatView: View {
         }
     }
     @ViewBuilder func messageContent(_ m: ChatMessage) -> some View {
-        if m.kind.hasPrefix("voice:") { VoiceMessageCard(message: m) }
+        if m.disappearing != nil {
+            DisappearingMessageCard(message: m) {
+                focused = false
+                let space = store.state.mode
+                if store.revealDisappearingMessage(m.id, space: space) {
+                    disappearingMessage = DisappearingMessageRequest(id: m.id, space: space)
+                }
+            }
+        } else if m.kind.hasPrefix("voice:") { VoiceMessageCard(message: m) }
         else if m.isHug {
             HugMessageCard(message:m) { focused=false;hugPreview=HugPreviewRequest(message:m) }
         } else if m.kind == "invite" {
@@ -128,10 +142,19 @@ struct PlayfulChatView: View {
         VStack(spacing: 9) {
             HStack(spacing: 7) {
                 TuantuanSticker(pose: 1).frame(width: 29, height: 30)
-                Text("团团替你把小心意收好").font(.system(size: 10)).foregroundStyle(Palette.muted)
+                Menu {
+                    Button("普通消息（保留记录）") { burnDuration = nil }.accessibilityIdentifier("burnDuration_off")
+                    ForEach(MessageBurnDuration.allCases) { duration in
+                        Button(duration.title) { burnDuration = duration }.accessibilityIdentifier("burnDuration_\(duration.rawValue)")
+                    }
+                } label: {
+                    Label(burnDuration.map { "阅后\($0.rawValue)秒" } ?? "普通消息", systemImage: burnDuration == nil ? "bubble.left" : "flame")
+                        .font(.system(size: 12, weight: .semibold)).frame(minHeight: 44)
+                }.accessibilityIdentifier("messageRetention")
                 Spacer()
                 Button { noteMode.toggle() } label: { Label(noteMode ? "小纸条" : "轻声说", systemImage: noteMode ? "envelope" : "bubble.left").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.rose).padding(.horizontal, 10).frame(height: 32).background(Palette.pink, in: Capsule()) }.accessibilityIdentifier("messageStyle")
             }
+            if burnDuration != nil { Text("仅下一条文字 · 点开后计时 · 草稿不保存 · 本机体验").font(.system(size: 10)).foregroundStyle(Palette.rose) }
             if let reply { HStack { Text("回复：\(reply)").lineLimit(1); Spacer(); Button { self.reply = nil } label: { Image(systemName: "xmark.circle.fill") } }.font(.caption).foregroundStyle(Palette.muted) }
             HStack(spacing: 7) {
                 HugChargeButton { level in focused=false;store.sendChargedHug(level:level) }
@@ -146,12 +169,14 @@ struct PlayfulChatView: View {
                 Button {
                     let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !value.isEmpty else { return }
-                    store.send(reply.map { "回复「\($0.prefix(50))」\n" + value } ?? value, kind: noteMode ? "note" : "text")
-                    if store.creative.animations && !reduceMotion, let keyword = store.play.keywords.first(where: { value.contains($0.word) }) {
+                    let outgoing = reply.map { "回复「\($0.prefix(50))」\n" + value } ?? value
+                    if let duration = burnDuration { store.sendDisappearingMessage(outgoing, duration: duration) }
+                    else { store.send(outgoing, kind: noteMode ? "note" : "text") }
+                    if burnDuration == nil && store.creative.animations && !reduceMotion, let keyword = store.play.keywords.first(where: { value.contains($0.word) }) {
                         let token = UUID(); celebrationID = token; celebration = keyword.effect
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { if celebrationID == token { celebration = nil } }
                     }
-                    draft = ""; reply = nil; focused = false
+                    draft = ""; burnDuration = nil; reply = nil; focused = false
                 } label: { Image(systemName: "arrow.right").font(.title3.bold()).foregroundStyle(.white).frame(width: 45, height: 45).background(Palette.rose, in: Circle()) }
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty).opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1).accessibilityIdentifier("sendMessage")
             }

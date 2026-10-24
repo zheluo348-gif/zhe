@@ -81,7 +81,7 @@ struct RootView: View {
             .onAppear { store.recordVisit() }
             .onChange(of: store.state.entered) { _, entered in if entered { store.recordVisit() } }
             .onChange(of: store.state.mode) { _, _ in store.recordVisit() }
-            .onChange(of: scenePhase) { _, phase in if phase == .active { store.recordVisit() } }
+            .onChange(of: scenePhase) { _, phase in if phase == .active { store.expireDisappearingMessages(); store.recordVisit() } }
             .onReceive(NotificationCenter.default.publisher(for: .circleOpenChat)) { _ in path = []; tab = 1 }
             .onReceive(NotificationCenter.default.publisher(for: .circleOpenHome)) { _ in path = []; tab = 0 }
             .alert("保存提示", isPresented: Binding(get: { store.saveError != nil }, set: { if !$0 { store.saveError = nil } })) { Button("重试") { store.persist() } } message: { Text(store.saveError ?? "") }
