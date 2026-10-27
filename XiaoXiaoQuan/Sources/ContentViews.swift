@@ -235,7 +235,7 @@ struct StatusView: View {
     var body: some View {
         ScrollView { VStack(alignment: .leading, spacing: 24) {
             Text("给此刻留一句话").font(.title2.bold()); Text("由你主动分享，随时可以修改或清除。").font(.subheadline).foregroundStyle(Palette.muted)
-            Surface { TextField("我现在…", text: $text, axis: .vertical).lineLimit(2...3).onChange(of: text) { _, v in if v.count > 80 { text = String(v.prefix(80)) } } }
+            Surface { TextField("我现在…", text: $text, axis: .vertical).lineLimit(2...3).accessibilityIdentifier("momentStatusInput").onChange(of: text) { _, v in if v.count > 80 { text = String(v.prefix(80)) } } }
             PhotosPicker(selection: $selectedPhoto, matching: .images) {
                 Surface { HStack(spacing: 14) {
                     if let photoData, let image = UIImage(data: photoData) { Image(uiImage: image).resizable().scaledToFill().frame(width: 70, height: 70).clipped().clipShape(RoundedRectangle(cornerRadius: 12)) }
@@ -250,7 +250,7 @@ struct StatusView: View {
                     if let photoData { try store.addPhotoMemory(photoData, caption: text.trimmingCharacters(in: .whitespacesAndNewlines)) }
                     store.update { $0.status = text.trimmingCharacters(in: .whitespacesAndNewlines) }; dismiss()
                 } catch { photoError = true }
-            }.disabled(loading)
+            }.disabled(loading).accessibilityIdentifier("saveMomentStatus")
             Button("清除我的状态") { store.update { $0.status = "" }; dismiss() }.font(.subheadline).foregroundStyle(Palette.muted).frame(maxWidth: .infinity)
             Text("本版状态只保存在本机，不读取位置、电量或其他应用。").font(.caption).foregroundStyle(Palette.muted)
         }.padding(22) }.background(store.background).navigationTitle("我的此刻").navigationBarTitleDisplayMode(.inline).onAppear { text = store.current.status }
@@ -285,7 +285,7 @@ struct ProfileView: View {
             NavigationLink(value: Screen.sharing) { Surface { IconTile(icon: "battery.75percent", title: "状态分享", subtitle: "电量与城市天气，由你决定", color: Palette.teal) } }.buttonStyle(.plain)
             if !store.friends { Surface { VStack(alignment: .leading, spacing: 12) { Text("在一起的日期").font(.subheadline.bold()); DatePicker("起始日", selection: Binding(get: { store.state.joined }, set: { store.state.joined = Calendar.current.startOfDay(for: $0); store.persist() }), in: ...Date(), displayedComponents: .date).datePickerStyle(.compact).font(.subheadline); Text("修改后首页的天数与周年倒数会一起更新。").font(.caption).foregroundStyle(Palette.muted) } } }
             Surface { Toggle("互动触感", isOn: Binding(get: { store.state.haptics }, set: { store.state.haptics = $0; store.persist() })).font(.subheadline).tint(store.accent) }
-            Surface { VStack(alignment: .leading, spacing: 13) { Label("关于这个开发版", systemImage: "iphone").font(.headline); Text("小小圈 0.4.2 · 本机开发版").font(.subheadline); Text("按 V2 / V3 设计逐步制作。消息、贴纸、绘图、原声录音、回忆和试玩进度保存在此设备。\n\nAI、登录邀请、跨设备聊天、推送与付费仍待接入。此处的本机模板和题库不会冒充 AI 或真人回复。").font(.subheadline).foregroundStyle(Palette.muted).lineSpacing(6) } }
+            Surface { VStack(alignment: .leading, spacing: 13) { Label("关于这个开发版", systemImage: "iphone").font(.headline); Text("小小圈 0.4.3 · 本机开发版").font(.subheadline); Text("按 V2 / V3 设计逐步制作。消息、贴纸、绘图、原声录音、回忆和试玩进度保存在此设备。\n\nAI、登录邀请、跨设备聊天、推送与付费仍待接入。此处的本机模板和题库不会冒充 AI 或真人回复。").font(.subheadline).foregroundStyle(Palette.muted).lineSpacing(6) } }
             Text("只属于彼此的一点小小日常。 ").font(.caption).foregroundStyle(Palette.muted).frame(maxWidth: .infinity).padding(.vertical, 15)
         }.padding(20) }.background(store.background)
     }

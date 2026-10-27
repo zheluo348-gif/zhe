@@ -31,20 +31,26 @@ def run_checks(source: Path) -> None:
         return
 
     if sys.platform.startswith("linux") and shutil.which("docker"):
+        import fcntl
+
         # Only generated files are exposed to the container. Checks need no network.
-        subprocess.run(
-            [
-                "docker", "--host=unix:///var/run/docker.sock", "run", "--rm",
-                "--network=none", "--user", f"{os.getuid()}:{os.getgid()}",
-                "--mount", f"type=bind,src={source.parent},dst=/checks",
-                "--workdir", "/checks", SWIFT_IMAGE,
-                "sh", "-ec",
-                'swiftc -parse-as-library -module-cache-path /tmp/swift-cache '
-                '"$1" -o "$2"; exec "./$2"',
-                "swift-rule-checks", source.name, binary.name,
-            ],
-            check=True,
-        )
+        # VFS daemons copy the entire toolchain per container. Serialize suites
+        # from this checkout so parallel test commands cannot exhaust its disk.
+        with (source.parent / ".swift-rules-docker.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            subprocess.run(
+                [
+                    "docker", "--host=unix:///var/run/docker.sock", "run", "--rm",
+                    "--network=none", "--user", f"{os.getuid()}:{os.getgid()}",
+                    "--mount", f"type=bind,src={source.parent},dst=/checks",
+                    "--workdir", "/checks", SWIFT_IMAGE,
+                    "sh", "-ec",
+                    'swiftc -parse-as-library -module-cache-path /tmp/swift-cache '
+                    '"$1" -o "$2"; exec "./$2"',
+                    "swift-rule-checks", source.name, binary.name,
+                ],
+                check=True,
+            )
         return
 
     raise SystemExit(

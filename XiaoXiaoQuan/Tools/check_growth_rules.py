@@ -31,6 +31,7 @@ store='''
 service=(src/'CreativeModels.swift').read_text().split('struct AIReply')[1].split('@MainActor extension CircleStore')[0]
 service='struct AIReply'+service
 choice=(src/'AIChoiceViews.swift').read_text().split('struct AIAvailabilityNote')[0].replace('import SwiftUI','')
+shared=(src/'SharedDrawingStore.swift').read_text()
 tests=r'''
 @main struct Checks {
  @MainActor static func main() async throws {
@@ -89,11 +90,60 @@ tests=r'''
  for key in ["couple","friends"] { var space=legacy[key] as! [String:Any];space.removeValue(forKey:"growth");legacy[key]=space }
  let old=try JSONDecoder().decode(SavedState.self,from:JSONSerialization.data(withJSONObject:legacy))
  check(old.profile==nil && old.couple.growth==nil && old.couple.messages.count==s.state.couple.messages.count,"legacy schema decodes")
- print(String(data:try JSONSerialization.data(withJSONObject:["checks":checks,"failures":0,"scope":"Production monthly wallpaper, AI choice, growth and invitation rules with in-memory store adapter"]),encoding:.utf8)!)
+ let drawingStore=CircleStore()
+ drawingStore.send("ordinary message")
+ let untouched=drawingStore.current.messages[0]
+ let drawingID=drawingStore.startSharedDrawing()
+ check(drawingStore.current.messages.count==2 && drawingStore.current.messages.last?.sharedDrawing?.players==drawingStore.memberNames,"shared drawing starts in chat with current participants")
+ check(drawingStore.current.messages.last?.sharedDrawing?.currentPlayer==drawingStore.myName,"author starts first round")
+ check(!drawingStore.finishSharedDrawing(drawingID,revision:0),"cannot finish an empty drawing")
+ check(!drawingStore.submitDrawingRound(drawingID,drawing:Data(),note:" \n ",revision:0),"blank rounds rejected")
+ let ink=Data([1,2,3])
+ check(drawingStore.submitDrawingRound(drawingID,drawing:ink,note:"A cat",revision:0),"first contribution accepted")
+ check(drawingStore.current.messages.last?.sharedDrawing?.currentPlayer=="阿哲","turn passes to partner")
+ check(!drawingStore.submitDrawingRound(drawingID,drawing:ink,note:"duplicate",revision:0),"stale and duplicate submissions rejected")
+ check(!drawingStore.finishSharedDrawing(drawingID,revision:1),"both participants contribute before finishing")
+ check(drawingStore.submitDrawingRound(drawingID,drawing:Data(),note:"A little fish",revision:1),"second participant can add a note")
+ check(drawingStore.current.messages.last?.sharedDrawing?.rounds.map(\.author)==[drawingStore.myName,"阿哲"],"each round keeps its author")
+ check(drawingStore.current.messages.last?.sharedDrawing?.rounds[0].drawing==ink,"previous ink preserved")
+ check(!drawingStore.finishSharedDrawing(drawingID,revision:1),"stale completion rejected")
+ check(drawingStore.finishSharedDrawing(drawingID,revision:2),"two-participant work can finish")
+ check(!drawingStore.finishSharedDrawing(drawingID,revision:2),"completion is idempotent")
+ check(!drawingStore.submitDrawingRound(drawingID,drawing:ink,note:"late",revision:2),"finished drawing immutable")
+ check(drawingStore.current.messages[0]==untouched,"ordinary history preserved")
+ let roundTrip=try JSONDecoder().decode(SavedState.self,from:JSONEncoder().encode(drawingStore.state))
+ check(roundTrip.couple.messages.last?.sharedDrawing==drawingStore.current.messages.last?.sharedDrawing,"rounds, ink, authors and completion survive relaunch")
+ drawingStore.state.mode="friends"
+ check(!drawingStore.submitDrawingRound(drawingID,drawing:ink,note:"wrong space",revision:2),"cross-space submissions rejected")
+ check(!drawingStore.finishSharedDrawing(drawingID,revision:2),"cross-space completion rejected")
+ let groupID=drawingStore.startSharedDrawing()
+ check(drawingStore.current.messages.last?.sharedDrawing?.players==drawingStore.memberNames && drawingStore.memberNames.count==6,"friend group participants captured")
+ check(drawingStore.submitDrawingRound(groupID,drawing:ink,note:"group",revision:0),"group first turn works")
+ check(drawingStore.state.couple.messages.last?.sharedDrawing==roundTrip.couple.messages.last?.sharedDrawing,"group changes do not alter couple work")
+ check(!drawingStore.submitDrawingRound(UUID(),drawing:ink,note:"missing",revision:0),"unknown invitation rejected")
+ var bounds=SharedDrawingSession(players:["A","B"])
+ check(bounds.append(drawing:Data(repeating:1,count:131072),note:String(repeating:"猫",count:90),revision:0),"maximum round data accepted")
+ check(bounds.rounds[0].note.count==80,"notes capped by characters")
+ check(!bounds.append(drawing:Data(repeating:1,count:131073),note:"oversize",revision:1),"oversize contribution rejected")
+ var limited=SharedDrawingSession(players:["A","B"])
+ for i in 0..<24 { check(limited.append(drawing:ink,note:"",revision:i),"round within limit accepted") }
+ check(!limited.append(drawing:ink,note:"extra",revision:24),"round limit enforced")
+ check(limited.finish(revision:24),"capped drawing can still finish")
+ var noPlayers=SharedDrawingSession(players:[])
+ check(!noPlayers.append(drawing:ink,note:"",revision:0),"missing players rejected")
+ var duplicatePlayers=SharedDrawingSession(players:["A","A"])
+ check(!duplicatePlayers.append(drawing:ink,note:"",revision:0),"duplicate identities rejected")
+ var onePlayer=SharedDrawingSession(players:["A"])
+ check(!onePlayer.append(drawing:ink,note:"",revision:0),"one player rejected")
+ var tooManyPlayers=SharedDrawingSession(players:(1...9).map{String($0)})
+ check(!tooManyPlayers.append(drawing:ink,note:"",revision:0),"group size limit enforced")
+ var blankPlayer=SharedDrawingSession(players:["A"," "])
+ check(!blankPlayer.append(drawing:ink,note:"",revision:0),"blank identity rejected")
+ print(String(data:try JSONSerialization.data(withJSONObject:["checks":checks,"failures":0,"scope":"Production growth, AI, invitation and shared drawing rules with in-memory store adapter"]),encoding:.utf8)!)
  }
 }
 '''.replace('\\.','\.').replace('\\"','\"').replace('\\(checks)','\(checks)')
 (root/'tmp').mkdir(exist_ok=True)
 networking = '\n#if canImport(FoundationNetworking)\nimport FoundationNetworking\n#endif\n'
-path=root/'tmp/GrowthRuleChecks.swift';path.write_text(networking+models+creative+play+growth+store+service+choice+tests)
+path=root/'tmp/GrowthRuleChecks.swift';path.write_text(networking+models+creative+play+growth+store+service+choice+shared+tests)
 run_checks(path)

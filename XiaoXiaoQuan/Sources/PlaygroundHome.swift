@@ -34,28 +34,18 @@ struct PlaygroundHomeView: View {
     }
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 17) {
+            VStack(spacing: 13) {
                 HStack {
                     HStack(spacing: -7) { MyAvatar(size: 37); Avatar(name: store.friends ? "柚" : "哲", size: 37) }
-                    VStack(alignment: .leading, spacing: 4) { Text(store.spaceName).font(.title3.bold()); Text(store.friends ? "把小日常，过成一窝热闹" : "只属于我们的，一点小日常").font(.caption).foregroundStyle(Palette.muted) }
+                    VStack(alignment: .leading, spacing: 4) { Text(store.spaceName).font(.headline).lineLimit(1).minimumScaleFactor(0.8); Text(store.friends ? "把小日常，过成一窝热闹" : "一起生活的第\(store.togetherDays)天").font(.system(size: 10)).foregroundStyle(Palette.muted) }
                     Spacer()
-                    NavigationLink(value: Screen.status) { Image(systemName: "face.smiling").frame(width: 40, height: 44).foregroundStyle(Palette.ink) }.accessibilityLabel("我的心情")
+                    Button { open(.calendar) } label: { Image(systemName: "calendar").frame(width: 44, height: 44) }.accessibilityLabel("我们的日历")
+                    Button { open(.sharing) } label: { Image(systemName: "gearshape").frame(width: 44, height: 44) }.accessibilityLabel("状态分享设置")
                 }.padding(.top, 7)
-                GrowingRoomCard(open: open)
-                HStack {
-                    Button { open(.growth) } label: { Label("成长旅行", systemImage: "sparkles").font(.system(size: 12, weight: .semibold)) }.accessibilityIdentifier("openGrowth")
-                    Spacer()
-                    Text(store.friends ? "熟悉的人，一起点亮日常" : "在一起 \(store.togetherDays) 天 · 距周年 \(store.nextAnniversary.days) 天").font(.system(size: 10)).foregroundStyle(Palette.muted)
-                }.padding(.horizontal, 3)
-                Surface(padding: 13) { HStack {
-                    Avatar(name: store.friends ? "柚" : "哲", size: 34)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(store.friends ? "小窝的此刻" : "阿哲的此刻").font(.subheadline.bold())
-                        Text("等待连接并主动分享状态").font(.caption).foregroundStyle(Palette.muted)
-                    }
-                    Spacer()
-                    NavigationLink(value: Screen.sharing) { Image(systemName: "battery.75percent").foregroundStyle(Palette.teal).frame(width: 44, height: 44) }
-                } }
+                HomeCoverView(open: open)
+                HomePartnerMomentCard(open: open)
+                HomeMyMomentCard(open: open)
+                HStack { Text("一起的小日常").font(.headline); Spacer(); Text("常用玩法都在这里").font(.caption2).foregroundStyle(Palette.muted) }.padding(.top, 7)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 13) {
                     ForEach(Array(shortcuts.enumerated()), id: \.offset) { i, item in
                         Button { open(item.2) } label: {
@@ -78,7 +68,7 @@ struct PlaygroundHomeView: View {
                 }.buttonStyle(.plain).foregroundStyle(Palette.ink).accessibilityIdentifier("dailyQuestion")
                 if store.friends { Surface { PollContent() } }
                 Text("本机开发体验 · 内容独立保存").font(.caption2).foregroundStyle(Palette.muted)
-            }.padding(.horizontal, 20).padding(.bottom, 22)
+            }.padding(.horizontal, 16).padding(.bottom, 22)
         }.onAppear { checkMilestone() }
             .onChange(of: store.growthStage.day) { _, _ in checkMilestone() }
             .sheet(item: $unlockedStage) { stage in StageUnlockView(stage:stage) }

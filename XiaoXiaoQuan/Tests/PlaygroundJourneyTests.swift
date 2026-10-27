@@ -4,7 +4,14 @@ final class PlaygroundJourneyTests: XCTestCase {
     @MainActor private func fresh() -> XCUIApplication {
         let app = XCUIApplication(); app.launchArguments = ["--uitesting", "--reset"]; app.launch()
         XCTAssertTrue(app.buttons["enterCircle"].waitForExistence(timeout: 12)); app.buttons["enterCircle"].tap()
-        XCTAssertTrue(app.buttons["quick_0"].waitForExistence(timeout: 5)); return app
+        showShortcuts(app); return app
+    }
+    @MainActor private func showShortcuts(_ app: XCUIApplication) {
+        for _ in 0..<7 {
+            if app.buttons["quick_0"].exists && app.buttons["quick_0"].isHittable { return }
+            app.swipeUp()
+        }
+        XCTFail("Cannot reach home shortcuts")
     }
     @MainActor private func tap(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<7 { if element.exists && element.isHittable { element.tap(); return }; app.swipeUp() }
@@ -15,7 +22,7 @@ final class PlaygroundJourneyTests: XCTestCase {
         tap(app.buttons["module_" + name], in: app)
     }
     @MainActor private func back(_ app: XCUIApplication) { app.navigationBars.buttons.element(boundBy: 0).tap() }
-    @MainActor private func reopen(_ app: XCUIApplication) { app.terminate(); app.launchArguments = ["--uitesting"]; app.launch(); XCTAssertTrue(app.buttons["quick_0"].waitForExistence(timeout: 8)) }
+    @MainActor private func reopen(_ app: XCUIApplication) { app.terminate(); app.launchArguments = ["--uitesting"]; app.launch(); XCTAssertTrue(app.buttons["sceneFeed"].waitForExistence(timeout: 8)); showShortcuts(app) }
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) { let a = XCTAttachment(screenshot: app.screenshot()); a.name = name; a.lifetime = .keepAlways; add(a) }
     @MainActor func testHabitRewardOnceAndRelaunch() {
         let app = fresh(); shot(app, "20-插画首页")
@@ -100,7 +107,7 @@ final class PlaygroundJourneyTests: XCTestCase {
     @MainActor func testNewDataIsolationBetweenSpaces() {
         let app = fresh(); app.buttons["quick_0"].tap(); app.buttons["habit_认真吃早餐"].tap(); back(app)
         app.buttons["tab_3"].tap(); app.buttons["mySpaces"].tap(); app.buttons["createSpace"].tap(); app.buttons["joinFriendsDemo"].tap()
-        XCTAssertTrue(app.buttons["quick_0"].waitForExistence(timeout: 5)); shot(app, "34-闺蜜小窝首页")
+        XCTAssertTrue(app.buttons["sceneFeed"].waitForExistence(timeout: 5)); showShortcuts(app); shot(app, "34-闺蜜小窝首页")
         app.buttons["quick_0"].tap(); XCTAssertTrue(app.buttons["habit_认真吃早餐"].isEnabled)
         back(app); module("rewards", app); XCTAssertTrue(app.staticTexts["12 朵"].waitForExistence(timeout: 5))
     }

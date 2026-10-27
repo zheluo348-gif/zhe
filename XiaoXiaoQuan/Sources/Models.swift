@@ -17,6 +17,38 @@ struct DisappearingContent: Codable, Equatable {
     }
 }
 
+struct SharedDrawingRound: Identifiable, Codable, Equatable {
+    var id = UUID()
+    let author: String
+    let drawing: Data
+    let note: String
+}
+
+struct SharedDrawingSession: Codable, Equatable {
+    let players: [String]
+    var rounds: [SharedDrawingRound] = []
+    var finished = false
+    var savedMemoryID: UUID?
+    var currentPlayer: String { players.isEmpty ? "小伙伴" : players[rounds.count % players.count] }
+    var canFinish: Bool { !finished && Set(rounds.map(\.author)).count >= 2 }
+
+    mutating func append(drawing: Data, note: String, revision: Int) -> Bool {
+        let note = String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))
+        guard !finished, revision == rounds.count, rounds.count < 24,
+              (2...8).contains(players.count), Set(players).count == players.count,
+              players.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+              drawing.count <= 131072, !drawing.isEmpty || !note.isEmpty else { return false }
+        rounds.append(SharedDrawingRound(author: currentPlayer, drawing: drawing, note: note))
+        return true
+    }
+
+    mutating func finish(revision: Int) -> Bool {
+        guard revision == rounds.count, canFinish else { return false }
+        finished = true
+        return true
+    }
+}
+
 struct ChatMessage: Identifiable, Codable, Equatable {
     var id = UUID()
     var text: String
@@ -27,6 +59,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     var date = Date()
     var invitation: PlayInvitation?
     var disappearing: DisappearingContent?
+    var sharedDrawing: SharedDrawingSession?
 }
 struct Wish: Identifiable, Codable {
     var id = UUID()

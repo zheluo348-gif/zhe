@@ -12,6 +12,7 @@ struct PlayfulChatView: View {
     @State private var gameToPlay: ChatMessage?
     @State private var disappearingMessage: DisappearingMessageRequest?
     @State private var burnDuration: MessageBurnDuration?
+    @State private var sharedDrawing: SharedDrawingRequest?
     @State private var noteMode = true
     @State private var draft = ""
     @State private var drawing = false
@@ -51,6 +52,7 @@ struct PlayfulChatView: View {
             .fullScreenCover(item:$disappearingMessage) { request in DisappearingMessageReader(request: request) }
             .sheet(item:$gameToPlay) { message in GameInvitationSheet(message:message) }
             .sheet(isPresented: $drawing) { DrawingNoteView() }
+            .sheet(item: $sharedDrawing) { request in SharedDrawingEditor(request: request) }
             .sheet(isPresented: $voice) { VoiceNoteView() }
             .sheet(isPresented: $inspiration) { InspirationDrawer() }
             .onReceive(NotificationCenter.default.publisher(for: .circleOpenChat)) { _ in draft = store.current.draft ?? "" }
@@ -85,7 +87,7 @@ struct PlayfulChatView: View {
                 messageContent(m).contextMenu {
                     if m.disappearing == nil {
                         Button("回复", systemImage: "arrowshape.turn.up.left") { reply = m.text; focused = true }
-                        if !m.kind.hasPrefix("voice:") {
+                        if !m.kind.hasPrefix("voice:"), m.sharedDrawing == nil {
                             Button(store.friends ? "上梗墙" : "保存回忆", systemImage: "bookmark") {
                                 store.addMemory(String((m.text.isEmpty ? "聊天的小片段" : m.text).prefix(60)), note: "来自\(m.sender)的聊天", kind: m.attachment != nil ? "照片" : (store.friends ? "梗墙" : "小事"), attachment: m.attachment)
                             }
@@ -109,6 +111,8 @@ struct PlayfulChatView: View {
                     disappearingMessage = DisappearingMessageRequest(id: m.id, space: space)
                 }
             }
+        } else if let session = m.sharedDrawing {
+            SharedDrawingCard(session: session) { focused = false; sharedDrawing = SharedDrawingRequest(id: m.id, space: store.state.mode) }
         } else if m.kind.hasPrefix("voice:") { VoiceMessageCard(message: m) }
         else if m.isHug {
             HugMessageCard(message:m) { focused=false;hugPreview=HugPreviewRequest(message:m) }
@@ -152,6 +156,11 @@ struct PlayfulChatView: View {
                         .font(.system(size: 12, weight: .semibold)).frame(minHeight: 44)
                 }.accessibilityIdentifier("messageRetention")
                 Spacer()
+                Button {
+                    focused = false
+                    let id = store.startSharedDrawing()
+                    sharedDrawing = SharedDrawingRequest(id: id, space: store.state.mode)
+                } label: { Label("一起画", systemImage: "pencil.and.outline").font(.system(size: 11, weight: .semibold)).frame(minHeight: 44) }.accessibilityIdentifier("startSharedDrawing")
                 Button { noteMode.toggle() } label: { Label(noteMode ? "小纸条" : "轻声说", systemImage: noteMode ? "envelope" : "bubble.left").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.rose).padding(.horizontal, 10).frame(height: 32).background(Palette.pink, in: Capsule()) }.accessibilityIdentifier("messageStyle")
             }
             if burnDuration != nil { Text("仅下一条文字 · 点开后计时 · 草稿不保存 · 本机体验").font(.system(size: 10)).foregroundStyle(Palette.rose) }
